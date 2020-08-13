@@ -4,15 +4,16 @@ const net = require("net");
 const Buffer = require("buffer").Buffer;
 const tracker = require("./tracker");
 const message = require("./message");
+const Pieces = require('./Pieces');
 
 module.exports = (torrent) => {
+  const requested = [];
   tracker.getPeers(torrent, (peers) => {
-    peers.map((peer) => download(peer, torrent));
+    peers.map((peer) => download(peer, torrent, requested));
   });
 };
 
-const download = (peer, torrent) => {
-  console.log("download", peer, torrent);
+const download = (peer, torrent, requested) => {
   const socket = net.Socket();
   socket.on("error", console.log);
   socket.connect(peer.port, peer.ip, () => {
@@ -20,14 +21,47 @@ const download = (peer, torrent) => {
     socket.write(message.buildHandshake(torrent));
   });
   // 2
+  const queue = [];
   onWholeMsg(socket, (msg) => {
-    console.log("Got message", msg);
-    msgHandler(msg, socket);
+    msgHandler(msg, socket, requested);
   });
 };
 
+const haveHandler = (payload, socket, requested) => {
+  const pieceIndex = payload.readInt32BE(0);
+  if (!requested[pieceIndex]) {
+    socket.write(message.buildRequest(/* ... */));
+  }
+  requested[pieceIndex] = true;
+};
+
+const bitfieldHandler = (payload) => {
+  //...
+};
+
+const pieceHandler = (payload, socket, requested, queue) => {
+  queue.shift();
+  requestPiece(socket, requested, queue);
+};
+
+const requestPiece = (socket, requested, queue) {
+  if(requested[queue[0]]) {
+    queue.shift();
+  } else {
+    
+  }
+}
+
+const chokeHandler = () => {
+  //...
+};
+
+const unchokeHandler = () => {
+  //...
+};
+
 // 2
-const msgHandler = (msg, socket) => {
+const msgHandler = (msg, socket, requested) => {
   if (isHandshake(msg)) {
     socket.write(message.buildInterested());
   } else {
@@ -41,7 +75,7 @@ const msgHandler = (msg, socket) => {
         unchokeHandler();
         break;
       case 4:
-        haveHandler(m.payload);
+        haveHandler(m.payload, socket, requested);
         break;
       case 5:
         bitfieldHandler(m.payload);
@@ -51,26 +85,6 @@ const msgHandler = (msg, socket) => {
         break;
     }
   }
-};
-
-chokeHandler = () => {
-  //...
-};
-
-unchokeHandler = () => {
-  //...
-};
-
-haveHandler = (payload) => {
-  //...
-};
-
-bitfieldHandler = (payload) => {
-  //...
-};
-
-pieceHandler = (payload) => {
-  //...
 };
 
 // 3
